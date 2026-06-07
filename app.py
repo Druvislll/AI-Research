@@ -42,6 +42,30 @@ st.markdown("""
         box-shadow: 0 4px 14px rgba(76, 175, 80, 0.45) !important;
         transform: translateY(-1px) !important;
     }
+    /* 删除按钮 - 红色 */
+    button[key="delete_industry"] {
+        background: linear-gradient(135deg, #f44336, #d32f2f) !important;
+        color: white !important;
+        border: none !important;
+    }
+    button[key="delete_industry"]:hover {
+        box-shadow: 0 4px 14px rgba(244, 67, 54, 0.45) !important;
+    }
+    /* 确认删除按钮 */
+    button[key="confirm_delete"] {
+        background: linear-gradient(135deg, #c62828, #b71c1c) !important;
+        color: white !important;
+        border: none !important;
+    }
+    /* 下载报告按钮 - 蓝色 */
+    button[key="download_report"] {
+        background: linear-gradient(135deg, #2196F3, #1976D2) !important;
+        color: white !important;
+        border: none !important;
+    }
+    button[key="download_report"]:hover {
+        box-shadow: 0 4px 14px rgba(33, 150, 243, 0.45) !important;
+    }
 
     /* ========== 卡片/容器 ========== */
     div[data-testid="stExpander"] {
@@ -112,6 +136,8 @@ def init_session():
         st.session_state.current_industry_id = None
     if "report_content" not in st.session_state:
         st.session_state.report_content = None
+    if "_confirm_delete" not in st.session_state:
+        st.session_state._confirm_delete = False
 
 
 
@@ -413,24 +439,33 @@ if st.session_state.current_industry_id is not None:
 
     with col_mid:
         if st.button("🗑️ 删除该研究", use_container_width=True, key="delete_industry"):
-            import shutil
-            industry_id = st.session_state.current_industry_id
-            industry = st.session_state.kb.get_industry(industry_id)
-            # 清空 ChromaDB 集合
-            from src.knowledge_base.vector_store import VectorStore
-            VectorStore().delete_collection()
-            # 删除 SQLite 数据
-            st.session_state.kb.delete_industry(industry_id)
-            # 清理 session
-            st.session_state.current_industry_id = None
-            st.session_state.report_content = None
-            # 删除报告文件
-            if industry:
-                report_path = config.REPORTS_DIR / industry["name"]
-                if report_path.exists():
-                    shutil.rmtree(report_path, ignore_errors=True)
-            st.success("✅ 已删除！")
+            st.session_state._confirm_delete = True
             st.rerun()
+
+        if st.session_state.get("_confirm_delete"):
+            industry = st.session_state.kb.get_industry(st.session_state.current_industry_id)
+            st.warning(f"⚠️ 确定要删除「{industry['name']}」的所有数据吗？此操作不可恢复。")
+            col_a, col_b = st.columns(2)
+            with col_a:
+                if st.button("是的，确认删除", use_container_width=True, key="confirm_delete"):
+                    import shutil
+                    industry_id = st.session_state.current_industry_id
+                    from src.knowledge_base.vector_store import VectorStore
+                    VectorStore().delete_collection()
+                    st.session_state.kb.delete_industry(industry_id)
+                    st.session_state.current_industry_id = None
+                    st.session_state.report_content = None
+                    st.session_state._confirm_delete = False
+                    if industry:
+                        report_path = config.REPORTS_DIR / industry["name"]
+                        if report_path.exists():
+                            shutil.rmtree(report_path, ignore_errors=True)
+                    st.success("✅ 已删除！")
+                    st.rerun()
+            with col_b:
+                if st.button("取消", use_container_width=True, key="cancel_delete"):
+                    st.session_state._confirm_delete = False
+                    st.rerun()
 
     with col_right:
         if st.session_state.report_content:
@@ -440,4 +475,5 @@ if st.session_state.current_industry_id is not None:
                 file_name=f"行业研究报告_{datetime.now().strftime('%Y%m%d')}.md",
                 mime="text/markdown",
                 use_container_width=True,
+                key="download_report",
             )
