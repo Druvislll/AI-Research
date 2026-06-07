@@ -355,13 +355,68 @@ with tab3:
     else:
         st.info("请先选择一个行业")
 
-# 底部（仅保留下载按钮，去掉清空）
-st.divider()
-if st.session_state.report_content:
-    st.download_button(
-        "📥 下载报告 (Markdown)",
-        data=st.session_state.report_content,
-        file_name=f"行业研究报告_{datetime.now().strftime('%Y%m%d')}.md",
-        mime="text/markdown",
-        use_container_width=True,
-    )
+# 底部（历史行业：搜索词 + 文档导入 + 更新 + 下载）
+if st.session_state.current_industry_id is not None:
+    st.divider()
+
+    with st.expander("🔍 高级搜索词设置（可选）"):
+        history_search_q = st.text_area(
+            "自定义搜索词（每行一个，为空则自动生成）",
+            placeholder="新能源汽车\n新能源汽车 政策\n新能源汽车 融资",
+            height=80,
+            key="history_search_queries",
+        )
+
+    with st.expander("📄 导入本地文档（可选）"):
+        history_uploaded = st.file_uploader(
+            "上传 PDF / Word / Markdown / TXT 文件",
+            type=["pdf", "docx", "doc", "md", "txt"],
+            accept_multiple_files=True,
+            key="history_upload",
+        )
+        history_urls = st.text_area(
+            "或输入文章链接（每行一个）",
+            placeholder="https://example.com/article1",
+            height=60,
+            key="history_import_urls",
+        )
+
+    col_left, col_mid, col_right = st.columns([2, 2, 3])
+    with col_left:
+        if st.button("🔄 更新研究", type="primary", use_container_width=True, key="update_research_bottom"):
+            industry = st.session_state.kb.get_industry(st.session_state.current_industry_id)
+            if industry:
+                with st.spinner("正在更新研究（重新采集 → 构建知识库 → 生成报告）..."):
+                    import asyncio
+                    workflow = st.session_state.workflow
+                    industry_id = st.session_state.current_industry_id
+
+                    # 自定义搜索词
+                    queries_list = None
+                    if history_search_q:
+                        qs = [q.strip() for q in history_search_q.split("\n") if q.strip()]
+                        if qs:
+                            queries_list = qs
+
+                    try:
+                        loop = asyncio.get_running_loop()
+                        collect_result = loop.run_until_complete(
+                            workflow.run_collection(industry_id, queries_list))
+                    except RuntimeError:
+                        collect_result = asyncio.run(workflow.run_collection(industry_id, queries_list))
+
+                    workflow.build_knowledge_base(industry_id)
+                    report_result = workflow.generate_report(industry_id)
+                    st.session_state.report_content = report_result.get("content", "")
+                    st.success("✅ 研究已更新！")
+                    st.rerun()
+
+    with col_right:
+        if st.session_state.report_content:
+            st.download_button(
+                "📥 下载报告 (Markdown)",
+                data=st.session_state.report_content,
+                file_name=f"行业研究报告_{datetime.now().strftime('%Y%m%d')}.md",
+                mime="text/markdown",
+                use_container_width=True,
+            )
