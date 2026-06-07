@@ -100,7 +100,7 @@ class ReportGenerator:
         return result
 
     def _format_sources(self, entries: list[dict]) -> str:
-        """格式化信息来源（带 [N] 编号）"""
+        """格式化信息来源（带 [N] 编号，标题文字作为超链接）"""
         sources = []
         seen = set()
         for e in entries:
@@ -118,7 +118,8 @@ class ReportGenerator:
             except Exception:
                 domain = ""
 
-            sources.append(f"[{ref_idx}] {title}  ({domain})\n    {url}")
+            # 标题文字作为超链接，不再显示完整URL
+            sources.append(f"[{ref_idx}] [{title} ({domain})]({url})")
 
         if not sources:
             return get_empty_section("信息来源")
