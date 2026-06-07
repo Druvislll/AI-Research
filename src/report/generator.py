@@ -35,8 +35,11 @@ class ReportGenerator:
         )
 
         # 追加完整来源列表（带 [N] 编号）
-        sources_section = self._format_sources(indexed_entries)
+        sources_section, ref_map = self._format_sources(indexed_entries)
         report_content += "\n\n## 八、信息来源\n" + sources_section
+
+        # 将报告正文中的 [N] 替换为可点击链接
+        report_content = self._make_refs_clickable(report_content, ref_map)
 
         return report_content
 
@@ -56,17 +59,38 @@ class ReportGenerator:
 - 在报告中引用时，在句末标注对应的编号，例如：
   "2025年中国新能源汽车销量突破2000万辆[1]，同比增长35%[2]。"
 - 同一信息在正文中多次引用时，每次都要标注编号
-- 确保每个关键数据/事实都有来源引用"""
+- 确保每个关键数据/事实都有来源引用
+
+执行摘要要求：
+- 位于报告最前面，面向高管/老板阅读
+- 只写核心结论，不写分析过程
+- 每条一行，加粗关键词
+- 控制在3-5条"""
+      
+
+        # 如果指定了关注方向，强调内容聚焦
+        focus_instruction = ""
+        if focus and focus != "全部":
+            focus_instruction = f"\n\n⚠️ 严格约束：请仅围绕「{focus}」这些方向撰写报告，不要涉及其他方向的内容。如果某个方向缺乏信息，如实说明即可，不要用其他方向的内容填充。"
 
         user_prompt = f"""行业名称：{industry_name}
 关注方向：{focus}
-参考信息（每条带 [N] 编号）：
+参考信息（每条带 [N] 编号）：{focus_instruction}
 
 {context}
 
 请按照以下模板生成报告（每个章节请填充实际内容，引用时标注 [N] 编号）：
 
-# {industry_name}行业研究报告（周报）
+# {industry_name}行业研究报告
+
+## 执行摘要
+【面向老板/高管：用3-5条极简语句概括本期报告最核心的发现，每条一行加粗。
+写作要求：不同于报告正文的详细分析，执行摘要只写结论，不写过程。
+示例格式：
+- **市场规模**：2025年XX行业规模达XX亿元，同比增长XX%
+- **关键变化**：XX政策出台，将影响行业竞争格局
+- **趋势判断**：行业正从XX向XX转型，头部企业加速布局
+- **风险提示**：需关注XX和XX两大风险】
 
 ## 一、行业概览
 [简要说明行业背景、范围和当前发展阶段]
@@ -81,7 +105,7 @@ class ReportGenerator:
 [基于以上信息，总结行业近期变化趋势]
 
 ## 五、重点公司动态
-[汇总行业内重点企业动态]
+[汇总行业内重点企业和竞品动态]
 
 ## 六、机会与风险
 [分析市场机会和潜在风险]
@@ -94,37 +118,58 @@ class ReportGenerator:
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             temperature=0.5,
-            max_tokens=8192,
+            max_tokens=12288,
         )
         log.info(f"  LLM 返回 | 报告长度: {len(result)}字")
         return result
 
     def _format_sources(self, entries: list[dict]) -> str:
-        """格式化信息来源（带 [N] 编号，标题文字作为超链接）"""
+        """格式化信息来源，返回 (markdown 字符串, ref_map) 元组"""
+        from urllib.parse import urlparse
+
+        ref_map = {}  # ref_idx → url
         sources = []
-        seen = set()
         for e in entries:
             ref_idx = e.get("_ref_index", 0)
             url = e.get("url", "")
             title = e.get("title", "未知来源")
 
-            if not url or url in seen:
+            if not url:
                 continue
-            seen.add(url)
 
-            from urllib.parse import urlparse
+            ref_map[ref_idx] = url
             try:
                 domain = urlparse(url).netloc
             except Exception:
                 domain = ""
 
-            # 标题文字作为超链接，不再显示完整URL
             sources.append(f"[{ref_idx}] [{title} ({domain})]({url})")
 
         if not sources:
-            return get_empty_section("信息来源")
+            return get_empty_section("信息来源"), ref_map
 
-        return "\n\n".join(sources)
+        return "\n\n".join(sources), ref_map
+
+    def _make_refs_clickable(self, report: str, ref_map: dict[int, str]) -> str:
+        """将报告正文中的 [N] 引用替换为可点击锚点链接"""
+        if not ref_map:
+            return report
+        import re
+        def replace_ref(m):
+            num = int(m.group(1))
+            url = ref_map.get(num)
+            if url:
+                return f'<sup><a href="{url}" target="_blank" style="color:#0088cc;text-decoration:none;font-size:0.75rem">[{num}]</a></sup>'
+            return m.group(0)
+        # 只替换正文中的 [N]（最后一个"信息来源"章节之前的），避免把来源列表的也替换
+        sep = "## 八、信息来源"
+        if sep in report:
+            body, sources = report.split(sep, 1)
+            body = re.sub(r'\[(\d+)\]', replace_ref, body)
+            report = body + sep + sources
+        else:
+            report = re.sub(r'\[(\d+)\]', replace_ref, report)
+        return report
 
     def save_report(self, industry_id: int, content: str) -> int:
         """保存报告到数据库和文件"""

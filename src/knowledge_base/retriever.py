@@ -34,6 +34,7 @@ class Retriever:
         # 构建带编号的上下文
         context_parts = []
         seen_texts = set()
+        seen_urls = set()
         indexed_entries = []  # 只保留 top_k 内去重后的条目
         idx = 0
 
@@ -42,15 +43,36 @@ class Retriever:
             content = e.get("content", e.get("summary", ""))[:500]
             url = e.get("url", "")
 
-            # 去重
+            # 内容去重
             key = content[:100]
             if key in seen_texts:
                 continue
             seen_texts.add(key)
 
+            # URL 去重（同一来源的不同分块只保留第一个）
+            if url:
+                if url in seen_urls:
+                    continue
+                seen_urls.add(url)
+
             idx += 1
-            e["_ref_index"] = idx  # 标记引用编号
+            e["_ref_index"] = idx  # 标记引用编号（去重后连续编号）
             indexed_entries.append(e)
+
+            domain = ""
+            if url:
+                from urllib.parse import urlparse
+                try:
+                    domain = urlparse(url).netloc
+                except Exception:
+                    pass
+
+            context_parts.append(
+                f"### [{idx}] {title} ({domain})\n{content}\n来源: {url}"
+            )
+
+            if idx >= top_k:
+                break
 
             domain = ""
             if url:

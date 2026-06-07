@@ -113,10 +113,41 @@ class KnowledgeBase:
         return dict(row) if row else None
 
     def add_source(self, industry_id: int, item: dict) -> int:
-        """添加或更新来源，相同 source_id 则用新内容更新旧内容"""
+        """添加或更新来源，相同 URL 不重复入库，仅更新内容"""
         conn = self._get_conn()
         now = datetime.now().isoformat()
         try:
+            url = item.get("url", "")
+            source_id = item.get("id", "")
+            title = item.get("title", "")
+            content = item.get("content", "")
+            source_type = item.get("source_type", "web")
+            tags = item.get("tags", "")
+            summary = item.get("summary", "")
+            scraped_at = item.get("scraped_at", now)
+
+            # URL 级别去重：相同 industry 下相同 URL 只更新不新增
+            if url:
+                existing = conn.execute(
+                    "SELECT id, source_id, created_at FROM sources WHERE industry_id = ? AND url = ?",
+                    (industry_id, url),
+                ).fetchone()
+                if existing:
+                    conn.execute(
+                        """UPDATE sources SET
+                               title = ?, content = ?,
+                               source_type = ?, tags = ?, summary = ?,
+                               scraped_at = ?
+                           WHERE id = ?""",
+                        (title, content,
+                         source_type, tags, summary,
+                         scraped_at, existing["id"]),
+                    )
+                    conn.commit()
+                    conn.close()
+                    return existing["id"]
+
+            # 无 URL 或新 URL：用 source_id UPSERT（兼容旧数据）
             conn.execute(
                 """INSERT INTO sources
                    (industry_id, source_id, title, url, content, source_type, tags, summary, scraped_at, created_at)
@@ -126,18 +157,8 @@ class KnowledgeBase:
                        title   = CASE WHEN excluded.title   != '' THEN excluded.title   ELSE sources.title END,
                        url     = excluded.url,
                        scraped_at = excluded.scraped_at""",
-                (
-                    industry_id,
-                    item.get("id", ""),
-                    item.get("title", ""),
-                    item.get("url", ""),
-                    item.get("content", ""),
-                    item.get("source_type", "web"),
-                    item.get("tags", ""),
-                    item.get("summary", ""),
-                    item.get("scraped_at", now),
-                    now,
-                ),
+                (industry_id, source_id, title, url, content,
+                 source_type, tags, summary, scraped_at, now),
             )
             conn.commit()
             row_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]

@@ -39,15 +39,16 @@ class ResearchWorkflow:
 
     def _build_queries(self, name: str, focus: str = "") -> list[str]:
         """根据行业名和关注方向生成搜索词"""
-        queries = [name]
         if focus:
+            # 选了方向 → 只搜指定方向，不搜通用词
+            queries = []
             for f in focus.split(", "):
                 f = f.strip()
                 if f:
                     queries.append(f"{name} {f}")
-        queries.append(f"{name} 最新动态")
-        queries.append(f"{name} 行业新闻")
-        return queries
+            return queries if queries else [name]
+        # 未选方向 → 通用搜索
+        return [name, f"{name} 最新动态", f"{name} 行业新闻"]
 
     async def run_collection(self, industry_id: int, queries: list[str] = None) -> dict:
         """执行信息采集（含信源评分过滤）"""
@@ -56,8 +57,10 @@ class ResearchWorkflow:
             return {"success": False, "message": "行业不存在"}
 
         name = industry["name"]
-        if not queries:
-            queries = self._build_queries(name, industry.get("focus", ""))
+        # 先基于行业名和关注方向生成自动搜索词
+        auto_queries = self._build_queries(name, industry.get("focus", ""))
+        # 用户提供了自定义词则追加到自动词后面，未提供则用自动词
+        queries = auto_queries + (queries or [])
 
         log.info(f"采集开始 | 行业: {name} | 查询词: {len(queries)}个")
         results = {"web": [], "search": [], "filtered": 0, "total": 0}

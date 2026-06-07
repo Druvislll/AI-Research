@@ -16,81 +16,215 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# 自定义 CSS
+# 自定义 CSS（参考 szbring.ai 设计风格）
 st.markdown("""
 <style>
-    /* ========== 全局 ========== */
-    .stApp { max-width: 100%; }
-    .main > div { padding-top: 1rem; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
-    /* ========== 搜索栏三列对齐 ========== */
-    /* 改用 st.columns vertical_alignment 实现，无需额外 CSS */
+    /* 去掉输入框聚焦时的 outline 和 box-shadow */
+    html body #root input:focus {
+        outline: none !important;
+        box-shadow: none !important;
+    }
+    html body #root .stMultiSelect *:focus,
+    html body #root .stMultiSelect *:focus-within {
+        outline: none !important;
+        box-shadow: none !important;
+    }
+
+    :root {
+        --primary: #0088cc;
+        --primary-light: #00a0e9;
+        --primary-dark: #006699;
+        --accent: #00c6ff;
+        --bg: #ffffff;
+        --bg-alt: #f8fafc;
+        --text: #1e293b;
+        --text2: #475569;
+        --text3: #94a3b8;
+        --border: rgba(0,0,0,0.06);
+        --shadow: 0 10px 30px rgba(0,0,0,0.04);
+        --shadow-h: 0 20px 40px rgba(0,136,204,0.1);
+    }
+
+    /* ========== 全局 ========== */
+    html, body, .stApp {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif !important;
+        color: var(--text) !important;
+        background: var(--bg) !important;
+    }
+    .stApp { max-width: 100%; }
+    .main > div { padding-top: 3rem !important; }
+
+    /* ========== 标题 ========== */
+    h1, h2, h3 {
+        color: #0f172a !important;
+        font-weight: 800 !important;
+        letter-spacing: -0.02em;
+    }
+    .stMarkdown h1 { font-size: 2rem; }
+    .stMarkdown h2 { font-size: 1.5rem; }
+    .stMarkdown h3 { font-size: 1.2rem; }
+
+    /* ========== 侧边栏 ========== */
+    section[data-testid="stSidebar"] {
+        background: var(--bg-alt) !important;
+        border-right: 1px solid var(--border);
+    }
+    section[data-testid="stSidebar"] .stButton button {
+        background: transparent !important;
+        border: 1px solid var(--border) !important;
+        color: var(--text2) !important;
+        font-weight: 500 !important;
+        border-radius: 10px !important;
+    }
+    section[data-testid="stSidebar"] .stButton button:hover {
+        border-color: var(--primary) !important;
+        color: var(--primary) !important;
+    }
+    section[data-testid="stSidebar"] .st-emotion-cache-16idsys {
+        background: linear-gradient(180deg, var(--primary), var(--primary-dark)) !important;
+        color: white !important;
+        font-weight: 800 !important;
+        border: none !important;
+    }
 
     /* ========== 按钮统一样式 ========== */
-    .stButton button {
-        border-radius: 8px !important;
+    .stButton button, button {
+        border-radius: 10px !important;
         font-weight: 600 !important;
-        transition: all 0.2s !important;
+        transition: all 0.3s ease !important;
     }
-    .stButton button[kind="primary"] {
-        background: linear-gradient(135deg, #4CAF50, #2E7D32) !important;
+    /* 主按钮 - 蓝色渐变 */
+    button[kind="primary"] {
+        background: linear-gradient(135deg, var(--primary), var(--primary-dark)) !important;
         border: none !important;
         color: white !important;
-        box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3) !important;
+        box-shadow: 0 8px 24px rgba(0, 136, 204, 0.15) !important;
     }
-    .stButton button[kind="primary"]:hover {
-        box-shadow: 0 4px 14px rgba(76, 175, 80, 0.45) !important;
-        transform: translateY(-1px) !important;
+    button[kind="primary"]:hover {
+        box-shadow: 0 12px 32px rgba(0, 136, 204, 0.25) !important;
+        transform: translateY(-2px) !important;
     }
-    /* 删除按钮 - 红色 */
-    button[key="delete_industry"] {
+    /* 次要按钮 - 轮廓风格 */
+    button[kind="secondary"], button[data-testid="baseButton-secondary"] {
+        background: white !important;
+        border: 1px solid var(--border) !important;
+        color: var(--text) !important;
+    }
+    button[kind="secondary"]:hover, button[data-testid="baseButton-secondary"]:hover {
+        border-color: var(--primary) !important;
+        color: var(--primary) !important;
+    }
+
+    /* 底部操作按钮 - 精确颜色覆盖 */
+    [data-testid="stAppViewBlockContainer"] [data-testid="stHorizontalBlock"]:last-of-type
+    [data-testid="column"]:nth-child(2) button[data-testid="baseButton-secondary"] {
         background: linear-gradient(135deg, #f44336, #d32f2f) !important;
         color: white !important;
         border: none !important;
     }
-    button[key="delete_industry"]:hover {
-        box-shadow: 0 4px 14px rgba(244, 67, 54, 0.45) !important;
+    [data-testid="stAppViewBlockContainer"] [data-testid="stHorizontalBlock"]:last-of-type
+    [data-testid="column"]:nth-child(2) button[data-testid="baseButton-secondary"]:hover {
+        box-shadow: 0 12px 32px rgba(244, 67, 54, 0.25) !important;
+        transform: translateY(-2px) !important;
     }
-    /* 确认删除按钮 */
-    button[key="confirm_delete"] {
-        background: linear-gradient(135deg, #c62828, #b71c1c) !important;
-        color: white !important;
-        border: none !important;
-    }
-    /* 下载报告按钮 - 蓝色 */
-    button[key="download_report"] {
+    [data-testid="stAppViewBlockContainer"] [data-testid="stHorizontalBlock"]:last-of-type
+    [data-testid="column"]:nth-child(3) [data-testid="stDownloadButton"] button {
         background: linear-gradient(135deg, #2196F3, #1976D2) !important;
         color: white !important;
         border: none !important;
     }
-    button[key="download_report"]:hover {
-        box-shadow: 0 4px 14px rgba(33, 150, 243, 0.45) !important;
+    [data-testid="stAppViewBlockContainer"] [data-testid="stHorizontalBlock"]:last-of-type
+    [data-testid="column"]:nth-child(3) [data-testid="stDownloadButton"] button:hover {
+        box-shadow: 0 12px 32px rgba(33, 150, 243, 0.25) !important;
+        transform: translateY(-2px) !important;
+    }
+
+    /* ========== 标签页 (Tabs) ========== */
+    .stTabs [role="tablist"] {
+        gap: 4px;
+        border-bottom: 1px solid var(--border);
+    }
+    .stTabs [role="tab"] {
+        border-radius: 8px 8px 0 0 !important;
+        padding: 8px 20px !important;
+        font-weight: 600 !important;
+        color: var(--text2) !important;
+        transition: all 0.3s !important;
+    }
+    .stTabs [role="tab"][aria-selected="true"] {
+        color: var(--primary) !important;
+        border-bottom: 2px solid var(--primary) !important;
+    }
+    .stTabs [role="tab"]:hover {
+        color: var(--primary) !important;
+        background: rgba(0, 136, 204, 0.04) !important;
     }
 
     /* ========== 卡片/容器 ========== */
     div[data-testid="stExpander"] {
-        border: 1px solid rgba(128, 128, 128, 0.2);
-        border-radius: 10px;
+        border: 1px solid var(--border) !important;
+        border-radius: 16px !important;
         margin-bottom: 0.5rem;
+        box-shadow: var(--shadow);
+        transition: all 0.3s;
+    }
+    div[data-testid="stExpander"]:hover {
+        box-shadow: var(--shadow-h);
     }
     div[data-testid="stExpander"] > details {
-        border-radius: 10px;
+        border-radius: 16px;
+    }
+    [data-testid="stVerticalBlockBorderWrapper"] > div {
+        border-radius: 16px !important;
+    }
+    /* 带边框的 container */
+    .stContainer [data-testid="stVerticalBlockBorderWrapper"] > div {
+        border-radius: 20px !important;
+        padding: 1.5rem !important;
+        box-shadow: var(--shadow);
     }
 
-    /* ========== 原始资料卡片（无固定白色背景，适配深色模式） ========== */
+    /* ========== 输入框（统一样式） ========== */
+    .stTextInput input {
+        border: 1px solid #d0d5dd !important;
+        border-radius: 8px !important;
+        background: #ffffff !important;
+        transition: all 0.2s !important;
+    }
+    .stTextInput input:focus {
+        border-color: var(--primary) !important;
+        box-shadow: 0 0 0 3px rgba(0, 136, 204, 0.12) !important;
+    }
+    /* 输入框标签样式统一 */
+    .stTextInput label {
+        font-weight: 500 !important;
+        color: #475569 !important;
+        font-size: 0.85rem !important;
+    }
+    /* "开始研究"按钮与输入框顶部对齐 */
+    [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stHorizontalBlock"]:first-of-type
+    [data-testid="column"]:nth-child(3) .stButton {
+        margin-top: 1.8rem !important;
+    }
+
+    /* ========== 原始资料卡片 ========== */
     .source-item {
-        padding: 0.75rem 1rem;
-        margin: 0.4rem 0;
-        border-left: 3px solid #4CAF50;
-        border-radius: 0 8px 8px 0;
-        background: rgba(128, 128, 128, 0.06);
-        transition: background 0.2s;
+        padding: 1rem 1.25rem;
+        margin: 0.5rem 0;
+        border-left: 3px solid var(--primary);
+        border-radius: 0 12px 12px 0;
+        background: var(--bg-alt);
+        transition: all 0.3s;
     }
     .source-item:hover {
-        background: rgba(76, 175, 80, 0.08);
+        background: white;
+        box-shadow: var(--shadow);
+        transform: translateX(4px);
     }
     .source-item a {
-        color: #4CAF50;
+        color: var(--primary) !important;
         text-decoration: none;
         font-size: 0.85rem;
         word-break: break-all;
@@ -102,28 +236,46 @@ st.markdown("""
     /* ========== 知识库条目 ========== */
     .kb-stat {
         font-size: 0.85rem;
-        opacity: 0.65;
+        color: var(--text3);
     }
 
     /* ========== 报告标题样式 ========== */
-    .report-header { font-size: 1.8rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .report-header {
+        font-size: 1.8rem;
+        font-weight: 800;
+        margin-bottom: 0.5rem;
+        color: #0f172a;
+    }
     .section-title {
-        font-size: 1.3rem; font-weight: 600; margin-top: 1.5rem;
+        font-size: 1.3rem;
+        font-weight: 700;
+        margin-top: 1.5rem;
         padding-bottom: 0.3rem;
-        border-bottom: 2px solid #4CAF50;
+        border-bottom: 2px solid var(--primary);
+        color: #0f172a;
     }
 
     /* ========== 进度条美化 ========== */
     div[data-testid="stProgress"] > div > div > div {
-        background: linear-gradient(90deg, #4CAF50, #81C784);
+        background: linear-gradient(90deg, var(--primary), var(--accent)) !important;
+        border-radius: 10px !important;
     }
 
-    /* ========== 侧边栏 ========== */
-    section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, rgba(76, 175, 80, 0.04), transparent);
+    /* ========== 提示/信息框 ========== */
+    .stAlert {
+        border-radius: 12px !important;
+        border: none !important;
+        box-shadow: var(--shadow);
     }
+    div[data-testid="stInfo"] {
+        background: rgba(0, 136, 204, 0.06) !important;
+        border-left: 3px solid var(--primary) !important;
+    }
+
 </style>
 """, unsafe_allow_html=True)
+
+
 
 
 def init_session():
@@ -138,10 +290,57 @@ def init_session():
         st.session_state.report_content = None
     if "_confirm_delete" not in st.session_state:
         st.session_state._confirm_delete = False
+    if "_pending_uploaded" not in st.session_state:
+        st.session_state._pending_uploaded = []
+    if "_pending_urls" not in st.session_state:
+        st.session_state._pending_urls = ""
 
 
 
 init_session()
+
+
+def import_pending_sources(industry_id: int):
+    """将暂存的上传文件和链接导入知识库"""
+    import tempfile, os, asyncio
+    from src.collector.doc_parser import DocParser
+    from src.collector.link_importer import LinkImporter
+
+    kb = st.session_state.kb
+    parser = DocParser()
+
+    # 处理上传文件
+    for uploaded in st.session_state._pending_uploaded:
+        try:
+            suffix = Path(uploaded.name).suffix.lower()
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+                tmp.write(uploaded.getbuffer())
+                tmp_path = tmp.name
+            item = parser.parse_file(tmp_path)
+            if item and item.get("content") and len(item["content"]) > 20:
+                item["title"] = uploaded.name
+                kb.add_source(industry_id, item)
+            os.unlink(tmp_path)
+        except Exception as e:
+            st.warning(f"文件 {uploaded.name} 解析失败: {e}")
+
+    # 处理链接
+    urls_text = st.session_state._pending_urls
+    if urls_text:
+        urls = [u.strip() for u in urls_text.split("\n") if u.strip()]
+        if urls:
+            importer = LinkImporter()
+            try:
+                loop = asyncio.get_running_loop()
+                items = loop.run_until_complete(importer.import_links(urls))
+            except RuntimeError:
+                items = asyncio.run(importer.import_links(urls))
+            for item in items:
+                kb.add_source(industry_id, item)
+
+    # 清空暂存
+    st.session_state._pending_uploaded = []
+    st.session_state._pending_urls = ""
 
 
 def run_research_sync(industry_name: str, focus: str, queries: list[str]):
@@ -156,6 +355,11 @@ def run_research_sync(industry_name: str, focus: str, queries: list[str]):
         progress_bar.progress(10, text="创建行业...")
         industry_id = workflow.create_industry(industry_name, focus)
         st.session_state.current_industry_id = industry_id
+
+        # Step 1.5 - 导入本地文档和链接
+        if st.session_state._pending_uploaded or st.session_state._pending_urls.strip():
+            progress_bar.progress(15, text="导入本地资料...")
+            import_pending_sources(industry_id)
 
         # Step 2 - 采集（用 asyncio.run 在顶层执行）
         progress_bar.progress(25, text="正在采集网络信息...")
@@ -218,7 +422,7 @@ with st.sidebar:
             date_str = reports[0]["created_at"][:10] if reports else \
                        ind.get("updated_at", "")[:10] or "无记录"
 
-            col1, col2 = st.columns([3, 1], vertical_alignment="center")
+            col1, col2 = st.columns([3, 1])
             with col1:
                 if st.button(f"📋 {ind['name']}", key=f"ind_{ind['id']}", use_container_width=True):
                     st.session_state.current_industry_id = ind["id"]
@@ -242,7 +446,7 @@ if st.session_state.current_industry_id is None:
     st.markdown("输入行业主题，自动完成 **信息采集 → 知识库构建 → 报告生成** 全流程")
 
     with st.container(border=True):
-        col1, col2, col3 = st.columns([4, 3, 2], vertical_alignment="bottom")
+        col1, col2, col3 = st.columns([4, 3, 2])
         with col1:
             industry_name = st.text_input(
                 "🏭 行业主题",
@@ -275,15 +479,22 @@ if st.session_state.current_industry_id is None:
             "上传 PDF / Word / Markdown / TXT 文件",
             type=["pdf", "docx", "doc", "md", "txt"],
             accept_multiple_files=True,
+            key="new_upload_files",
         )
         import_urls = st.text_area(
             "或输入文章链接（每行一个）",
             placeholder="https://example.com/article1\nhttps://example.com/article2",
             height=60,
+            key="new_import_urls",
         )
-        if uploaded_files or import_urls:
-            if st.button("导入资料", use_container_width=True):
-                st.info("导入功能将在运行研究时自动处理已上传的文件和链接")
+        if st.button("暂存导入资料", use_container_width=True, key="new_import_btn"):
+            st.session_state._pending_uploaded = list(uploaded_files) if uploaded_files else []
+            st.session_state._pending_urls = import_urls or ""
+            if st.session_state._pending_uploaded or st.session_state._pending_urls.strip():
+                st.success(f"✅ 已暂存 {len(st.session_state._pending_uploaded)} 个文件和 "
+                           f"{len([u for u in st.session_state._pending_urls.split(chr(10)) if u.strip()])} 个链接，开始研究时将自动导入")
+            else:
+                st.info("请先上传文件或输入链接")
 
     if research_btn and industry_name:
         queries_list = [q.strip() for q in search_queries.split("\n") if q.strip()] if search_queries else None
@@ -333,12 +544,12 @@ tab1, tab2, tab3 = st.tabs(["📝 研究报告", "📚 知识库", "📡 原始�
 
 with tab1:
     if st.session_state.report_content:
-        st.markdown(st.session_state.report_content)
+        st.markdown(st.session_state.report_content, unsafe_allow_html=True)
     elif st.session_state.current_industry_id:
         reports = st.session_state.kb.get_reports(st.session_state.current_industry_id)
         if reports:
             st.session_state.report_content = reports[0]["content"]
-            st.markdown(reports[0]["content"])
+            st.markdown(reports[0]["content"], unsafe_allow_html=True)
         else:
             st.info("💡 请先运行「开始研究」生成报告")
     else:
@@ -365,8 +576,17 @@ with tab3:
     if st.session_state.current_industry_id:
         sources = st.session_state.kb.get_sources(st.session_state.current_industry_id)
         if sources:
-            st.caption(f"共 {len(sources)} 条原始资料")
+            # URL 去重
+            seen = set()
+            unique = []
             for s in sources:
+                url = s.get("url", "")
+                if not url or url in seen:
+                    continue
+                seen.add(url)
+                unique.append(s)
+            st.caption(f"共 {len(unique)} 条原始资料（去重前 {len(sources)} 条）")
+            for s in unique:
                 st.markdown(
                     f"<div class='source-item'>"
                     f"<strong>{s['title']}</strong><br>"
@@ -406,6 +626,14 @@ if st.session_state.current_industry_id is not None:
             height=60,
             key="history_import_urls",
         )
+        if st.button("暂存导入资料", use_container_width=True, key="history_import_btn"):
+            st.session_state._pending_uploaded = list(history_uploaded) if history_uploaded else []
+            st.session_state._pending_urls = history_urls or ""
+            if st.session_state._pending_uploaded or st.session_state._pending_urls.strip():
+                st.success(f"✅ 已暂存 {len(st.session_state._pending_uploaded)} 个文件和 "
+                           f"{len([u for u in st.session_state._pending_urls.split(chr(10)) if u.strip()])} 个链接")
+            else:
+                st.info("请先上传文件或输入链接")
 
     col_left, col_mid, col_right = st.columns([2, 2, 3])
     with col_left:
@@ -413,6 +641,9 @@ if st.session_state.current_industry_id is not None:
             industry = st.session_state.kb.get_industry(st.session_state.current_industry_id)
             if industry:
                 with st.spinner("正在更新研究（重新采集 → 构建知识库 → 生成报告）..."):
+                    # 先导入本地资料
+                    if st.session_state._pending_uploaded or st.session_state._pending_urls.strip():
+                        import_pending_sources(st.session_state.current_industry_id)
                     import asyncio
                     workflow = st.session_state.workflow
                     industry_id = st.session_state.current_industry_id
@@ -450,8 +681,8 @@ if st.session_state.current_industry_id is not None:
                 if st.button("是的，确认删除", use_container_width=True, key="confirm_delete"):
                     import shutil
                     industry_id = st.session_state.current_industry_id
-                    from src.knowledge_base.vector_store import VectorStore
-                    VectorStore().delete_collection()
+                    # 用 workflow 自身的 vector_store 删除集合，保持引用有效
+                    st.session_state.workflow.vector_store.delete_collection()
                     st.session_state.kb.delete_industry(industry_id)
                     st.session_state.current_industry_id = None
                     st.session_state.report_content = None
@@ -469,11 +700,20 @@ if st.session_state.current_industry_id is not None:
 
     with col_right:
         if st.session_state.report_content:
-            st.download_button(
-                "📥 下载报告 (Markdown)",
-                data=st.session_state.report_content,
-                file_name=f"行业研究报告_{datetime.now().strftime('%Y%m%d')}.md",
-                mime="text/markdown",
-                use_container_width=True,
-                key="download_report",
-            )
+            import markdown as md_lib
+            html_content = md_lib.markdown(st.session_state.report_content, extensions=["extra"])
+            wrap_html = f"""<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
+<title>行业研究报告</title><style>
+body {{ max-width:960px; margin:0 auto; padding:40px 20px; font-family:'Inter','PingFang SC','Microsoft YaHei',sans-serif; line-height:1.8; color:#1e293b; }}
+h1 {{ font-size:2rem; font-weight:800; color:#0f172a; border-bottom:3px solid #0088cc; padding-bottom:12px; }}
+h2 {{ font-size:1.4rem; font-weight:700; color:#0f172a; margin-top:2rem; border-bottom:1px solid #e2e8f0; padding-bottom:8px; }}
+</style></head><body>{html_content}</body></html>"""
+            dl1, dl2 = st.columns(2)
+            with dl1:
+                st.download_button("📥 Markdown", data=st.session_state.report_content,
+                    file_name=f"行业研究报告_{datetime.now().strftime('%Y%m%d')}.md",
+                    mime="text/markdown", use_container_width=True, key="download_md")
+            with dl2:
+                st.download_button("📄 HTML", data=wrap_html,
+                    file_name=f"行业研究报告_{datetime.now().strftime('%Y%m%d')}.html",
+                    mime="text/html", use_container_width=True, key="download_html")
