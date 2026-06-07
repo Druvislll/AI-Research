@@ -112,8 +112,7 @@ def init_session():
         st.session_state.current_industry_id = None
     if "report_content" not in st.session_state:
         st.session_state.report_content = None
-    if "_trigger_regen" not in st.session_state:
-        st.session_state._trigger_regen = False
+
 
 
 init_session()
@@ -193,7 +192,7 @@ with st.sidebar:
             date_str = reports[0]["created_at"][:10] if reports else \
                        ind.get("updated_at", "")[:10] or "无记录"
 
-            col1, col2, col3 = st.columns([2, 1, 1], vertical_alignment="center")
+            col1, col2 = st.columns([3, 1], vertical_alignment="center")
             with col1:
                 if st.button(f"📋 {ind['name']}", key=f"ind_{ind['id']}", use_container_width=True):
                     st.session_state.current_industry_id = ind["id"]
@@ -202,11 +201,6 @@ with st.sidebar:
                     st.rerun()
             with col2:
                 st.caption(date_str)
-            with col3:
-                if st.button("🔄", key=f"regen_{ind['id']}", help="更新研究"):
-                    st.session_state.current_industry_id = ind["id"]
-                    st.session_state._trigger_regen = True
-                    st.rerun()
     else:
         st.info("暂无历史行业，请新建研究")
 
@@ -280,11 +274,10 @@ if st.session_state.current_industry_id is None:
 if st.session_state.current_industry_id is not None:
     industry = st.session_state.kb.get_industry(st.session_state.current_industry_id)
     if industry:
-        col1, col2, col3 = st.columns([3, 3, 2])
+        col1, col2, col3 = st.columns([3, 3, 1])
         with col1:
             st.markdown(f"### 🏭 {industry['name']}")
         with col2:
-            # 可编辑的关注方向
             current_focus = [f.strip() for f in industry.get("focus", "").split(",") if f.strip()]
             focus = st.multiselect(
                 "🎯 关注方向",
@@ -294,45 +287,16 @@ if st.session_state.current_industry_id is not None:
                 label_visibility="collapsed",
             )
         with col3:
-            col_a, col_b = st.columns(2)
-            with col_a:
-                update_btn = st.button("🔄 更新研究", type="primary", use_container_width=True,
-                                       key="update_research")
-            with col_b:
-                regen_btn = st.button("📝 重新生成", use_container_width=True,
-                                      key="regen_report")
-
-        # 处理点击事件
-        if update_btn or st.session_state.get("_trigger_regen"):
-            st.session_state._trigger_regen = False
-            focus_str = ", ".join(focus)
-            with st.spinner("正在更新研究..."):
-                import asyncio
-                workflow = st.session_state.workflow
-                industry_id = st.session_state.current_industry_id
-
-                # 更新关注方向
-                workflow.kb.create_industry(industry["name"], focus_str)
-
-                # 重新采集 + 构建知识库 + 生成报告
-                try:
-                    loop = asyncio.get_running_loop()
-                    collect_result = loop.run_until_complete(
-                        workflow.run_collection(industry_id))
-                except RuntimeError:
-                    collect_result = asyncio.run(workflow.run_collection(industry_id))
-
-                workflow.build_knowledge_base(industry_id)
-                report_result = workflow.generate_report(industry_id)
-                st.session_state.report_content = report_result.get("content", "")
-                st.success("✅ 研究已更新！")
-                st.rerun()
+            regen_btn = st.button("📝 重新生成", use_container_width=True,
+                                  key="regen_report", type="primary")
 
         if regen_btn:
             focus_str = ", ".join(focus)
             workflow = st.session_state.workflow
             industry_id = st.session_state.current_industry_id
+            # 更新关注方向
             workflow.kb.create_industry(industry["name"], focus_str)
+            # 仅重新生成报告
             report_result = workflow.generate_report(industry_id)
             st.session_state.report_content = report_result.get("content", "")
             st.success("✅ 报告已重新生成！")
