@@ -1,0 +1,206 @@
+"""知识库数据模型 - SQLite 元数据管理"""
+
+import sqlite3
+import json
+from datetime import datetime
+from pathlib import Path
+from typing import Optional
+from src import config
+
+
+class KnowledgeBase:
+    """知识库元数据管理（SQLite）"""
+
+    def __init__(self, db_path: Optional[Path] = None):
+        self.db_path = db_path or config.DB_PATH
+        self._init_db()
+
+    def _get_conn(self):
+        conn = sqlite3.connect(str(self.db_path))
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    def _init_db(self):
+        conn = self._get_conn()
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS industries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                focus TEXT DEFAULT '',
+                report_type TEXT DEFAULT '周报',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS sources (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                industry_id INTEGER NOT NULL,
+                source_id TEXT NOT NULL,
+                title TEXT DEFAULT '',
+                url TEXT DEFAULT '',
+                content TEXT DEFAULT '',
+                source_type TEXT DEFAULT 'web',
+                tags TEXT DEFAULT '',
+                summary TEXT DEFAULT '',
+                scraped_at TEXT DEFAULT '',
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (industry_id) REFERENCES industries(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS knowledge_entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                industry_id INTEGER NOT NULL,
+                source_id TEXT NOT NULL,
+                title TEXT DEFAULT '',
+                summary TEXT DEFAULT '',
+                tags TEXT DEFAULT '',
+                content TEXT DEFAULT '',
+                url TEXT DEFAULT '',
+                vector_id TEXT DEFAULT '',
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (industry_id) REFERENCES industries(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS reports (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                industry_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                content TEXT DEFAULT '',
+                report_type TEXT DEFAULT '周报',
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (industry_id) REFERENCES industries(id)
+            );
+
+            -- 确保唯一约束（兼容旧数据库升级）
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_sources_unique
+                ON sources(industry_id, source_id);
+        """)
+        conn.commit()
+        conn.close()
+
+    def create_industry(self, name: str, focus: str = "", report_type: str = "周报") -> int:
+        conn = self._get_conn()
+        now = datetime.now().isoformat()
+        try:
+            conn.execute(
+                "INSERT INTO industries (name, focus, report_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+                (name, focus, report_type, now, now),
+            )
+            conn.commit()
+            return conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        except sqlite3.IntegrityError:
+            # 已存在则返回现有 id
+            row = conn.execute("SELECT id FROM industries WHERE name = ?", (name,)).fetchone()
+            return row[0] if row else 0
+        finally:
+            conn.close()
+
+    def get_industries(self) -> list[dict]:
+        conn = self._get_conn()
+        rows = conn.execute("SELECT * FROM industries ORDER BY updated_at DESC").fetchall()
+        conn.close()
+        return [dict(r) for r in rows]
+
+    def get_industry(self, industry_id: int) -> Optional[dict]:
+        conn = self._get_conn()
+        row = conn.execute("SELECT * FROM industries WHERE id = ?", (industry_id,)).fetchone()
+        conn.close()
+        return dict(row) if row else None
+
+    def add_source(self, industry_id: int, item: dict) -> int:
+        """添加或更新来源，相同 source_id 则用新内容更新旧内容"""
+        conn = self._get_conn()
+        now = datetime.now().isoformat()
+        try:
+            conn.execute(
+                """INSERT INTO sources
+                   (industry_id, source_id, title, url, content, source_type, tags, summary, scraped_at, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(industry_id, source_id) DO UPDATE SET
+                       content = CASE WHEN excluded.content != '' THEN excluded.content ELSE sources.content END,
+                       title   = CASE WHEN excluded.title   != '' THEN excluded.title   ELSE sources.title END,
+                       url     = excluded.url,
+                       scraped_at = excluded.scraped_at""",
+                (
+                    industry_id,
+                    item.get("id", ""),
+                    item.get("title", ""),
+                    item.get("url", ""),
+                    item.get("content", ""),
+                    item.get("source_type", "web"),
+                    item.get("tags", ""),
+                    item.get("summary", ""),
+                    item.get("scraped_at", now),
+                    now,
+                ),
+            )
+            conn.commit()
+            row_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.close()
+            return row_id
+        except Exception as e:
+            conn.close()
+            return 0
+
+    def get_sources(self, industry_id: int) -> list[dict]:
+        conn = self._get_conn()
+        rows = conn.execute(
+            "SELECT * FROM sources WHERE industry_id = ? ORDER BY created_at DESC",
+            (industry_id,),
+        ).fetchall()
+        conn.close()
+        return [dict(r) for r in rows]
+
+    def add_knowledge_entry(self, industry_id: int, entry: dict) -> int:
+        conn = self._get_conn()
+        now = datetime.now().isoformat()
+        conn.execute(
+            """INSERT INTO knowledge_entries
+               (industry_id, source_id, title, summary, tags, content, url, vector_id, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                industry_id,
+                entry.get("source_id", ""),
+                entry.get("title", ""),
+                entry.get("summary", ""),
+                entry.get("tags", ""),
+                entry.get("content", ""),
+                entry.get("url", ""),
+                entry.get("vector_id", ""),
+                now,
+            ),
+        )
+        conn.commit()
+        row_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.close()
+        return row_id
+
+    def get_knowledge_entries(self, industry_id: int) -> list[dict]:
+        conn = self._get_conn()
+        rows = conn.execute(
+            "SELECT * FROM knowledge_entries WHERE industry_id = ? ORDER BY created_at DESC",
+            (industry_id,),
+        ).fetchall()
+        conn.close()
+        return [dict(r) for r in rows]
+
+    def add_report(self, industry_id: int, title: str, content: str, report_type: str = "周报") -> int:
+        conn = self._get_conn()
+        now = datetime.now().isoformat()
+        conn.execute(
+            "INSERT INTO reports (industry_id, title, content, report_type, created_at) VALUES (?, ?, ?, ?, ?)",
+            (industry_id, title, content, report_type, now),
+        )
+        conn.commit()
+        row_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.close()
+        return row_id
+
+    def get_reports(self, industry_id: int) -> list[dict]:
+        conn = self._get_conn()
+        rows = conn.execute(
+            "SELECT * FROM reports WHERE industry_id = ? ORDER BY created_at DESC",
+            (industry_id,),
+        ).fetchall()
+        conn.close()
+        return [dict(r) for r in rows]
