@@ -27,3 +27,6 @@ Thumbs.db
 
 # Test
 _test_*.py
+
+# Requirements doc (internal use only)
+AI-Research功能需求.md
