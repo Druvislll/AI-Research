@@ -89,7 +89,12 @@ class KnowledgeBase:
             conn.commit()
             return conn.execute("SELECT last_insert_rowid()").fetchone()[0]
         except sqlite3.IntegrityError:
-            # 已存在则返回现有 id
+            # 已存在则更新 focus 和 updated_at
+            conn.execute(
+                "UPDATE industries SET focus = ?, updated_at = ? WHERE name = ?",
+                (focus, now, name),
+            )
+            conn.commit()
             row = conn.execute("SELECT id FROM industries WHERE name = ?", (name,)).fetchone()
             return row[0] if row else 0
         finally:

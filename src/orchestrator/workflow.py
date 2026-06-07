@@ -37,6 +37,18 @@ class ResearchWorkflow:
     def create_industry(self, name: str, focus: str = "", report_type: str = "周报") -> int:
         return self.kb.create_industry(name, focus, report_type)
 
+    def _build_queries(self, name: str, focus: str = "") -> list[str]:
+        """根据行业名和关注方向生成搜索词"""
+        queries = [name]
+        if focus:
+            for f in focus.split(", "):
+                f = f.strip()
+                if f:
+                    queries.append(f"{name} {f}")
+        queries.append(f"{name} 最新动态")
+        queries.append(f"{name} 行业新闻")
+        return queries
+
     async def run_collection(self, industry_id: int, queries: list[str] = None) -> dict:
         """执行信息采集（含信源评分过滤）"""
         industry = self.kb.get_industry(industry_id)
@@ -45,7 +57,7 @@ class ResearchWorkflow:
 
         name = industry["name"]
         if not queries:
-            queries = [name, f"{name} 最新动态", f"{name} 行业新闻"]
+            queries = self._build_queries(name, industry.get("focus", ""))
 
         log.info(f"采集开始 | 行业: {name} | 查询词: {len(queries)}个")
         results = {"web": [], "search": [], "filtered": 0, "total": 0}

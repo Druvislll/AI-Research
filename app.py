@@ -112,6 +112,8 @@ def init_session():
         st.session_state.current_industry_id = None
     if "report_content" not in st.session_state:
         st.session_state.report_content = None
+    if "_trigger_regen" not in st.session_state:
+        st.session_state._trigger_regen = False
 
 
 init_session()
@@ -172,46 +174,42 @@ def run_research_sync(industry_name: str, focus: str, queries: list[str]):
 
 # ==================== 侧边栏 ====================
 with st.sidebar:
-    # ---- 顶部标题 ----
     st.title("📊 AI-Research")
     st.caption("行业研究报告自动生成系统")
     st.divider()
 
     # ---- 历史行业列表 ----
     st.subheader("📂 历史行业")
-    industries = st.session_state.kb.get_industries()
 
-    # 添加新的研究报告按钮（紧跟在历史行业下方）
     if st.button("➕ 添加新的研究报告", use_container_width=True, type="secondary"):
         st.session_state.current_industry_id = None
         st.session_state.report_content = None
         st.rerun()
 
+    industries = st.session_state.kb.get_industries()
     if industries:
         for ind in industries:
-            # 获取该行业最新报告/资料的日期
             reports = st.session_state.kb.get_reports(ind["id"])
-            if reports:
-                date_str = reports[0]["created_at"][:10]
-            else:
-                date_str = ind.get("updated_at", "")[:10] or "无记录"
+            date_str = reports[0]["created_at"][:10] if reports else \
+                       ind.get("updated_at", "")[:10] or "无记录"
 
-            col1, col2 = st.columns([3, 1], vertical_alignment="center")
+            col1, col2, col3 = st.columns([2, 1, 1], vertical_alignment="center")
             with col1:
                 if st.button(f"📋 {ind['name']}", key=f"ind_{ind['id']}", use_container_width=True):
                     st.session_state.current_industry_id = ind["id"]
                     reports = st.session_state.kb.get_reports(ind["id"])
-                    if reports:
-                        st.session_state.report_content = reports[0]["content"]
-                    else:
-                        st.session_state.report_content = None
+                    st.session_state.report_content = reports[0]["content"] if reports else None
                     st.rerun()
             with col2:
                 st.caption(date_str)
+            with col3:
+                if st.button("🔄", key=f"regen_{ind['id']}", help="更新研究"):
+                    st.session_state.current_industry_id = ind["id"]
+                    st.session_state._trigger_regen = True
+                    st.rerun()
     else:
         st.info("暂无历史行业，请新建研究")
 
-    # ---- 底部：版本信息 ----
     st.divider()
     st.caption("v0.1.0 | AI-Research")
 
@@ -245,7 +243,6 @@ if st.session_state.current_industry_id is None:
                 disabled=not industry_name,
             )
 
-    # --- 高级搜索词设置 ---
     with st.expander("🔍 高级搜索词设置（可选）"):
         search_queries = st.text_area(
             "自定义搜索词（每行一个，为空则自动生成）",
@@ -253,7 +250,6 @@ if st.session_state.current_industry_id is None:
             height=80,
         )
 
-    # --- 文档导入区域 ---
     with st.expander("📄 导入本地文档（可选）"):
         uploaded_files = st.file_uploader(
             "上传 PDF / Word / Markdown / TXT 文件",
@@ -269,13 +265,10 @@ if st.session_state.current_industry_id is None:
             if st.button("导入资料", use_container_width=True):
                 st.info("导入功能将在运行研究时自动处理已上传的文件和链接")
 
-    # ==================== 执行研究 ====================
     if research_btn and industry_name:
         queries_list = [q.strip() for q in search_queries.split("\n") if q.strip()] if search_queries else None
         focus_str = ", ".join(focus)
-
         result = run_research_sync(industry_name, focus_str, queries_list)
-
         if result:
             st.success(f"✅ 研究完成！共采集 {result['collect_count']} 条信息，"
                        f"构建 {result['kb_count']} 个知识块，报告已生成。")
@@ -283,10 +276,71 @@ if st.session_state.current_industry_id is None:
         else:
             st.error("研究流程未完成，请检查上方错误信息。")
 
+# ==================== 查看历史行业 ====================
+if st.session_state.current_industry_id is not None:
+    industry = st.session_state.kb.get_industry(st.session_state.current_industry_id)
+    if industry:
+        col1, col2, col3 = st.columns([3, 3, 2])
+        with col1:
+            st.markdown(f"### 🏭 {industry['name']}")
+        with col2:
+            # 可编辑的关注方向
+            current_focus = [f.strip() for f in industry.get("focus", "").split(",") if f.strip()]
+            focus = st.multiselect(
+                "🎯 关注方向",
+                options=config.FOCUS_OPTIONS,
+                default=current_focus,
+                key=f"edit_focus_{industry['id']}",
+                label_visibility="collapsed",
+            )
+        with col3:
+            col_a, col_b = st.columns(2)
+            with col_a:
+                update_btn = st.button("🔄 更新研究", type="primary", use_container_width=True,
+                                       key="update_research")
+            with col_b:
+                regen_btn = st.button("📝 重新生成", use_container_width=True,
+                                      key="regen_report")
+
+        # 处理点击事件
+        if update_btn or st.session_state.get("_trigger_regen"):
+            st.session_state._trigger_regen = False
+            focus_str = ", ".join(focus)
+            with st.spinner("正在更新研究..."):
+                import asyncio
+                workflow = st.session_state.workflow
+                industry_id = st.session_state.current_industry_id
+
+                # 更新关注方向
+                workflow.kb.create_industry(industry["name"], focus_str)
+
+                # 重新采集 + 构建知识库 + 生成报告
+                try:
+                    loop = asyncio.get_running_loop()
+                    collect_result = loop.run_until_complete(
+                        workflow.run_collection(industry_id))
+                except RuntimeError:
+                    collect_result = asyncio.run(workflow.run_collection(industry_id))
+
+                workflow.build_knowledge_base(industry_id)
+                report_result = workflow.generate_report(industry_id)
+                st.session_state.report_content = report_result.get("content", "")
+                st.success("✅ 研究已更新！")
+                st.rerun()
+
+        if regen_btn:
+            focus_str = ", ".join(focus)
+            workflow = st.session_state.workflow
+            industry_id = st.session_state.current_industry_id
+            workflow.kb.create_industry(industry["name"], focus_str)
+            report_result = workflow.generate_report(industry_id)
+            st.session_state.report_content = report_result.get("content", "")
+            st.success("✅ 报告已重新生成！")
+            st.rerun()
+
 # ==================== 显示报告和知识库 ====================
 tab1, tab2, tab3 = st.tabs(["📝 研究报告", "📚 知识库", "📡 原始资料"])
 
-# --- Tab1: 报告 ---
 with tab1:
     if st.session_state.report_content:
         st.markdown(st.session_state.report_content)
@@ -300,7 +354,6 @@ with tab1:
     else:
         st.info("💡 在侧边栏选择一个行业，或在输入框填写行业名称后点击「开始研究」")
 
-# --- Tab2: 知识库 ---
 with tab2:
     if st.session_state.current_industry_id:
         entries = st.session_state.kb.get_knowledge_entries(st.session_state.current_industry_id)
@@ -318,7 +371,6 @@ with tab2:
     else:
         st.info("请先选择一个行业")
 
-# --- Tab3: 原始资料 ---
 with tab3:
     if st.session_state.current_industry_id:
         sources = st.session_state.kb.get_sources(st.session_state.current_industry_id)
@@ -339,19 +391,13 @@ with tab3:
     else:
         st.info("请先选择一个行业")
 
-# 底部
+# 底部（仅保留下载按钮，去掉清空）
 st.divider()
-col1, col2, col3 = st.columns(3)
-with col1:
-    if st.button("🗑️ 清空当前报告"):
-        st.session_state.report_content = None
-        st.rerun()
-with col3:
-    if st.session_state.report_content:
-        st.download_button(
-            "📥 下载报告 (Markdown)",
-            data=st.session_state.report_content,
-            file_name=f"行业研究报告_{datetime.now().strftime('%Y%m%d')}.md",
-            mime="text/markdown",
-            use_container_width=True,
-        )
+if st.session_state.report_content:
+    st.download_button(
+        "📥 下载报告 (Markdown)",
+        data=st.session_state.report_content,
+        file_name=f"行业研究报告_{datetime.now().strftime('%Y%m%d')}.md",
+        mime="text/markdown",
+        use_container_width=True,
+    )
