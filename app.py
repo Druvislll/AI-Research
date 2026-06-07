@@ -411,6 +411,27 @@ if st.session_state.current_industry_id is not None:
                     st.success("✅ 研究已更新！")
                     st.rerun()
 
+    with col_mid:
+        if st.button("🗑️ 删除该研究", use_container_width=True, key="delete_industry"):
+            import shutil
+            industry_id = st.session_state.current_industry_id
+            industry = st.session_state.kb.get_industry(industry_id)
+            # 清空 ChromaDB 集合
+            from src.knowledge_base.vector_store import VectorStore
+            VectorStore().delete_collection()
+            # 删除 SQLite 数据
+            st.session_state.kb.delete_industry(industry_id)
+            # 清理 session
+            st.session_state.current_industry_id = None
+            st.session_state.report_content = None
+            # 删除报告文件
+            if industry:
+                report_path = config.REPORTS_DIR / industry["name"]
+                if report_path.exists():
+                    shutil.rmtree(report_path, ignore_errors=True)
+            st.success("✅ 已删除！")
+            st.rerun()
+
     with col_right:
         if st.session_state.report_content:
             st.download_button(

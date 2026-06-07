@@ -209,3 +209,18 @@ class KnowledgeBase:
         ).fetchall()
         conn.close()
         return [dict(r) for r in rows]
+
+    def delete_industry(self, industry_id: int) -> bool:
+        """删除行业及其所有关联数据"""
+        conn = self._get_conn()
+        try:
+            conn.execute("DELETE FROM sources WHERE industry_id = ?", (industry_id,))
+            conn.execute("DELETE FROM knowledge_entries WHERE industry_id = ?", (industry_id,))
+            conn.execute("DELETE FROM reports WHERE industry_id = ?", (industry_id,))
+            conn.execute("DELETE FROM industries WHERE id = ?", (industry_id,))
+            conn.commit()
+            return True
+        except Exception:
+            return False
+        finally:
+            conn.close()
